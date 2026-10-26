@@ -1,10 +1,11 @@
 const { Client } = require('discord.js-selfbot-v13');
+const { joinVoiceChannel } = require('@discordjs/voice');
 const express = require('express');
 
-// Tạo web server tối giản để giữ Render luôn thức (không bị sleep)
+// Tạo web server tối giản để giữ Render luôn thức (chống sleep)
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('Voice Bot đang hoạt động!'));
+app.get('/', (req, res) => res.send('Voice Bot đang hoạt động 24/7!'));
 app.listen(PORT, () => console.log(`Web server đang chạy ở cổng ${PORT}`));
 
 // Đọc toàn bộ chuỗi token từ biến môi trường DISCORD_TOKENS trên Render
@@ -23,36 +24,30 @@ if (tokens.length === 0) {
 tokens.forEach((token, index) => {
     const client = new Client({ checkUpdate: false });
 
-    // Hàm thực hiện nhiệm vụ chui vào phòng voice
-    async function joinVoice() {
+    async function connectVoice() {
         try {
             const channel = await client.channels.fetch(CHANNEL_ID);
             if (channel && channel.isVoice()) {
-                await channel.join();
+                joinVoiceChannel({
+                    channelId: channel.id,
+                    guildId: channel.guild.id,
+                    adapterCreator: channel.guild.voiceAdapterCreator,
+                    selfMute: true,
+                    selfDeaf: true,
+                });
                 console.log(`[JOIN] Bot ${index + 1} (${client.user.tag}) đã vào phòng voice thành công!`);
             } else {
                 console.log(`[LỖI] Không tìm thấy kênh voice hợp lệ cho bot ${index + 1}`);
             }
         } catch (err) {
-            console.log(`[LỖI] Bot ${index + 1} chưa vào được phòng, sẽ thử lại sau 10 giây...`);
-            setTimeout(joinVoice, 10000); // Thử lại sau 10 giây nếu lỗi
+            console.log(`[LỖI] Bot ${index + 1} chưa vào được phòng, sẽ thử lại sau 10 giây...`, err.message);
+            setTimeout(connectVoice, 10000);
         }
     }
 
     client.on('ready', async () => {
         console.log(`[OK] Bot ${index + 1} (${client.user.tag}) đã đăng nhập thành công!`);
-        joinVoice();
-    });
-
-    // Tự động bắt sự kiện nếu bị văng khỏi phòng voice
-    client.on('voiceStateUpdate', (oldState, newState) => {
-        if (newState.id === client.user.id) {
-            // Nếu trước đó ở trong phòng mà giờ bị mất kết nối / ra ngoài
-            if (oldState.channelId && !newState.channelId) {
-                console.log(`[WARNING] Bot ${index + 1} bị văng khỏi phòng voice! Đang tự động vào lại...`);
-                setTimeout(joinVoice, 3000); // Sau 3 giây tự động chui vào lại
-            }
-        }
+        connectVoice();
     });
 
     client.login(token).catch(err => {
